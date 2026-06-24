@@ -162,24 +162,28 @@ def analyze(content: str, file_path: str, file_type: str) -> list[AnalyzerFindin
                     matched_text=match.group(0)[:200],
                 )
             )
+    # Collect best-confidence PE4 finding per line to avoid double-counting lines
+    # that match multiple patterns (e.g. DockerClient(base_url=".../docker.sock")).
+    pe4_best: dict[int, AnalyzerFinding] = {}
     for pattern, confidence in PE4_PATTERNS:
         for match in re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE):
             line_num = get_line_number(content, match.start())
             context = get_context(content, match.start())
             if _is_documentation_example(context, file_type):
                 continue
-            findings.append(
-                AnalyzerFinding(
-                    rule_id="PE4",
-                    message="Docker Socket Access",
-                    severity=Severity.HIGH,
-                    location=loc(line_num),
-                    confidence=confidence,
-                    tags=tag,
-                    context=context,
-                    matched_text=match.group(0)[:200],
-                )
+            if line_num in pe4_best and pe4_best[line_num].confidence >= confidence:
+                continue
+            pe4_best[line_num] = AnalyzerFinding(
+                rule_id="PE4",
+                message="Docker Socket Access",
+                severity=Severity.HIGH,
+                location=loc(line_num),
+                confidence=confidence,
+                tags=tag,
+                context=context,
+                matched_text=match.group(0)[:200],
             )
+    findings.extend(pe4_best.values())
     return findings
 
 

@@ -354,6 +354,23 @@ class TestRunStaticPatternsPrivilegeEscalationPE4:
         assert pe4[0].context is not None
         assert pe4[0].matched_text is not None
 
+    def test_pe4_combined_line_produces_exactly_one_finding(self):
+        """A line matching multiple PE4 patterns must produce exactly one PE4 finding."""
+        state = {
+            "components": ["skill.py"],
+            "file_cache": {
+                "skill.py": 'client = docker.DockerClient(base_url="unix:///var/run/docker.sock")\n',
+            },
+        }
+        findings = static_runner.run_static_patterns(state, [privilege_escalation_module])
+        pe4 = [f for f in findings if f.rule_id == "PE4"]
+        assert len(pe4) == 1, (
+            f"Expected 1 PE4 finding, got {len(pe4)}: {[f.matched_text for f in pe4]}"
+        )
+        assert (
+            pe4[0].confidence == 0.9
+        )  # /var/run/docker.sock has higher confidence than DockerClient(
+
     def test_pe4_docker_from_env_produces_finding(self):
         """docker.from_env() yields PE4 (HIGH)."""
         state = {
@@ -406,11 +423,7 @@ class TestRunStaticPatternsPrivilegeEscalationPE4:
             "components": ["SKILL.md"],
             "file_cache": {
                 "SKILL.md": (
-                    "# Docker SDK\n\n"
-                    "For example:\n"
-                    "```python\n"
-                    "client = docker.from_env()\n"
-                    "```\n"
+                    "# Docker SDK\n\nFor example:\n```python\nclient = docker.from_env()\n```\n"
                 ),
             },
         }
